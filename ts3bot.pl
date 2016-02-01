@@ -15,18 +15,22 @@ die "Error reading config file: $!" unless defined $config;
 #syslog facility is local2 by default
 openlog(basename($0), "pid", "local2");
 
-&info("starting: $config->{botname}\n");
 
 if (-e $config->{pidfile}) {
         open PIDFILE,$config->{pidfile};
         my $p=<PIDFILE>;
         chomp $p;
         close PIDFILE;
+
+	my $exists = kill 0, $p;
+	die("Process is already running with pid $p\n") if($exists);
         &info("Removing old pidfile, pid was $p\n");
 }
 open PIDFILE,">$config->{pidfile}" or &fatal("Cannot write pidfile $config->{pidfile}: $!\n");
 print PIDFILE "$$\n";
 close PIDFILE;
+
+&info("starting: $config->{botname}\n");
 
 my $sock = new IO::Socket::INET (
 	PeerAddr => $config->{serveraddress},
@@ -59,10 +63,10 @@ while (1) {
 
 		foreach(@lines) {
 			chomp;
-#			print $_ ."\n";
-			if(!/\S/ or /Welcome to the TeamSpeak 3/ or /TS3/) {
+			if(!/\S/ or /Welcome to the TeamSpeak 3/ or /^TS3$/) {
 				next;
 			}
+
 			if(/error id=(\d+)/) {
 				if($1 !~ /^0$/) {
 					&info("error ". $1 ." \n");
@@ -71,6 +75,7 @@ while (1) {
 				next;
 			}
 		
+
 			if(/virtualserver_clientsonline=(\d+)/) {
 				&info("Users online: " . ($1 - 1) . "\n");
 				next;
@@ -78,20 +83,18 @@ while (1) {
 
 			if(/notifytextmessage/) {
 				my @datas = split / /, $_;
-				my %d;
+				my %tmp;
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-#					print "*  " . $key . " : " . $value ."\n";
-					$d{$key} = $value;
+					$tmp{$key} = $value;
 				}
-				&info("Got message from $d{invokername}: $d{msg}");
-				if(!checkop( $d{'invokeruid'} )) {
+				&info("Got message from $tmp{invokername}: $tmp{msg}");
+				if(!checkop( $tmp{'invokeruid'} )) {
 					next;
 				}
 
-#				print Dumper(\%d);
-				if($d{msg} =~ /\!dump/) {
+				if($tmp{msg} =~ /\!dump/) {
 					my $count = 0;
 					foreach my $c (@clients) {
 						if($c->{clid}) {
@@ -102,80 +105,73 @@ while (1) {
 					}
 					print "Total: $count\n";
 				}
+				print Dumper(\%tmp);
 				next;
 			}
 			
 			if(/notifycliententerview/) {
 				my @datas = split / /, $_;
-				my $clid;
 				my %tmp;
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-#					print "*  " . $key . " : " . $value ."\n";
-					if($key =~ /clid/) { $clid = $value; }
 					$tmp{$key} = $value;
 				}
 				$tmp{'time'} = time;
 				if($tmp{'client_type'} =~ /^0$/) {	#no server query
-					$clients[$clid] = \%tmp;
+					$clients[$tmp{clid}] = \%tmp;
 				}
 
-				&info("Client " .$tmp{client_nickname}. "(" . $clid . ") connected");
-				# print $clients[$clid]{clid} . "\n";
-				#print Dumper($clients[$clid]);
+				&info("Client " .$tmp{client_nickname}. "(" . $tmp{clid} . ") connected");
+				print Dumper(\%tmp);
 				next;
 			}
 	
 			if(/notifyclientleftview/) {
 				my @datas = split / /, $_;
-				my $clid;
+				my %tmp;
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					if($key =~ /clid/) { $clid = $value; }
+					$tmp{$key} = $value;
 				}
 
-				if(! $clients[$clid]) {
-					&info("Client (" . $clid . ") disconnected.");
+				if(! $clients[$tmp{clid}]) {
+					&info("Client (" . $tmp{clid} . ") disconnected.");
 				}
 				else {
-					&info("Client " . $clients[$clid]{client_nickname} . "(" . $clid . ") disconnected. Online time " . (time - $clients[$clid]{'time'}));
-					my $onlinetime = time - $clients[$clid]{'time'};
+					&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
+					my $onlinetime = time - $clients[$tmp{clid}]{'time'};
 
-				#	print "INSERT INTO onlinetime (client_id, client_unique_identifier, onlinetime) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?;\n";
-				#	print $clients[$clid]{client_database_id}."\n";
-				#	print $clients[$clid]{client_unique_identifier}."\n";
-				#	print time - $clients[$clid]{'time'}."\n";
-				#	print time - $clients[$clid]{'time'}."\n";
-
-					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, onlinetime) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?;";
+					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, nickname, onlinetime) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?, nickname=?;";
 
 					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
 					$sh->execute(
-						$clients[$clid]{client_database_id},
-						$clients[$clid]{client_unique_identifier},
+						$clients[$tmp{clid}]{client_database_id},
+						$clients[$tmp{clid}]{client_unique_identifier},
+						$clients[$tmp{clid}]{client_nickname},
 						$onlinetime,
 						$onlinetime,
+						$clients[$tmp{clid}]{client_nickname}
 					) or die "Huh?" . $dbh->errstr;
 					$sh->finish;
 
 				}
-				delete $clients[$clid];
+				delete $clients[$tmp{clid}];
+				print Dumper(\%tmp);
 				next;
 			}
 			if(/notifyclientmoved/) {
 				my @datas = split / /, $_;
-				my $clid;
-				my %d;
+				my %tmp;
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					if($key =~ /clid/) { $clid = $value; }
-					$d{$key} = $value;
+					if($key =~ /clid/) { $tmp{clid} = $value; }
+					$tmp{$key} = $value;
 				}
-				&info("Client (" . $clid . ") moved.");
-				print Dumper(\%d);
+				&info("Client (" . $tmp{clid} . ") moved.");
+				print Dumper(\%tmp);
 				next;
 			}
 
