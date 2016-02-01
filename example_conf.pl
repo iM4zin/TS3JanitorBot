@@ -1,0 +1,22 @@
+
+{
+	botname        => 'Janitor bot',
+
+	ops => [
+		'Z0vv8ay\\/UDZ4GbVNwKPDbfq57TU',
+		"asdf"
+	],
+
+	serveraddress  => '127.0.0.1',
+	serverport     => '10011',
+	serverid       => '1',
+	serveruser     => 'ts3_username',
+	serverpass     => 'ts3_password',
+
+	db_host        => 'localhost',
+	db_username    => 'ts3db_username_here',
+	db_password    => 'ts3db_password_here',
+	db_database    => 'ts3db_database_here',
+
+	pidfile        => './ts3bot.pid',
+}
