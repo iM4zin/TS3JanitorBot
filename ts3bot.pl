@@ -4,7 +4,6 @@ use File::Basename;
 use IO::Socket;
 use DBI;
 use Data::Dumper;
-
 use warnings; use strict;
 
 my $config=do("conf.pl");
@@ -47,12 +46,24 @@ my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host="
 
 &stopbot("Could not create socket: $!") unless $sock;
 
+my $botname = $config->{botname};
+$botname =~ s/\\/\\\\/g;
+$botname =~ s/\//\\\//g;
+$botname =~ s/\ /\\s/g;
+
 &ts("use sid=" .$config->{serverid});
 &ts_silent("login client_login_name=" .$config->{serveruser}. " client_login_password=" .$config->{serverpass});
 &ts("serverinfo");
 &ts("servernotifyregister event=textprivate");
 #&ts("servernotifyregister event=server");
 &ts("servernotifyregister event=channel id=0");
+
+&ts("servernotifyregister event=server");
+&ts("servernotifyregister event=textserver");
+&ts("servernotifyregister event=textchannel");
+&ts("servernotifyregister event=textprivate");
+
+&ts("clientupdate client_nickname=" . $botname);
 
 my $pingtime = time;
 while (1) {
@@ -170,7 +181,7 @@ while (1) {
 					if($key =~ /clid/) { $tmp{clid} = $value; }
 					$tmp{$key} = $value;
 				}
-				&info("Client (" . $tmp{clid} . ") moved.");
+				&info("Client (" . $tmp{clid} . ") moved. to channel id " . $tmp{ctid} . "");
 				print Dumper(\%tmp);
 				next;
 			}
