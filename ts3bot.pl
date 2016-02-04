@@ -185,6 +185,19 @@ while (1) {
 				print Dumper(\%tmp);
 				next;
 			}
+			if(/notifychanneldeleted/) {
+				my @datas = split / /, $_;
+				my %tmp;
+				shift(@datas);
+				while(@datas) {
+					my ($key, $value) = split /\s*=\s*/, shift(@datas);
+					if($key =~ /clid/) { $tmp{clid} = $value; }
+					$tmp{$key} = $value;
+				}
+				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				print Dumper(\%tmp);
+				next;
+			}
 
 			print "Unknow command: " . $_."\n";
 				
