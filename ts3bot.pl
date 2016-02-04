@@ -47,9 +47,6 @@ my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host="
 &stopbot("Could not create socket: $!") unless $sock;
 
 my $botname = $config->{botname};
-$botname =~ s/\\/\\\\/g;
-$botname =~ s/\//\\\//g;
-$botname =~ s/\ /\\s/g;
 
 &ts("use sid=" .$config->{serverid});
 &ts_silent("login client_login_name=" .$config->{serveruser}. " client_login_password=" .$config->{serverpass});
@@ -63,7 +60,7 @@ $botname =~ s/\ /\\s/g;
 &ts("servernotifyregister event=textchannel");
 &ts("servernotifyregister event=textprivate");
 
-&ts("clientupdate client_nickname=" . $botname);
+&ts("clientupdate client_nickname=" . escape($botname));
 
 my $pingtime = time;
 while (1) {
@@ -211,6 +208,38 @@ while (1) {
 	sleep 1;
 }
 
+sub escape {
+	$_=shift;
+	s/\\/\\\\/g;
+	s/\//\\\//g;
+	s/\ /\\s/g;
+
+	s/\|/\\p/g;
+	s/\a/\\a/g;
+#	s/\b/\\b/g;
+	s/\f/\\f/g;
+	s/\n/\\n/g;
+	s/\r/\\r/g;
+	s/\t/\\t/g;
+#	s/\v/\\v/g;
+	return $_;
+}
+
+sub unescape {
+	$_=shift;
+	s/\\\\/\\/g;
+	s/\\\//\//g;
+	s/\\s/\ /g;
+	s/\\p/\|/g;
+	s/\\a/\a/g;
+#	s/\\b/\b/g;
+	s/\\f/\f/g;
+	s/\\n/\n/g;
+	s/\\r/\r/g;
+	s/\\t/\t/g;
+#	s/\\v/\v/g;
+	return $_;
+}
 sub info {
 	my $msg = shift;
 	chomp $msg;
