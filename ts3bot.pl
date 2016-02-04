@@ -151,7 +151,7 @@ while (1) {
 					&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
 					my $onlinetime = time - $clients[$tmp{clid}]{'time'};
 
-					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, nickname, onlinetime) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?, nickname=?;";
+					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, nickname, onlinetime) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?, nickname=?, connectioncount=connectioncount+1;";
 
 					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
 					$sh->execute(

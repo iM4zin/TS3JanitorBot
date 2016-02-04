@@ -7,3 +7,5 @@ ALTER TABLE `onlinetime` ADD UNIQUE KEY `client_id` (`client_id`);
 
 ALTER TABLE `onlinetime` ADD `nickname` VARCHAR(128) NOT NULL AFTER `client_unique_identifier`;
 ALTER TABLE `onlinetime` CHANGE `nickname` `nickname` VARCHAR(128) CHARACTER SET utf8 COLLATE utf8_bin NOT NULL;
+ALTER TABLE `onlinetime` ADD `connectioncount` INT UNSIGNED NOT NULL DEFAULT '0' ;
+ALTER TABLE `onlinetime` ADD `lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL ;
