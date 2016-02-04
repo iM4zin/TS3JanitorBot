@@ -181,7 +181,7 @@ while (1) {
 					if($key =~ /clid/) { $tmp{clid} = $value; }
 					$tmp{$key} = $value;
 				}
-				&info("Client (" . $tmp{clid} . ") moved. to channel id " . $tmp{ctid} . "");
+				&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved. to channel id " . $tmp{ctid} . "");
 				print Dumper(\%tmp);
 				next;
 			}
