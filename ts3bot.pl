@@ -169,20 +169,31 @@ while (1) {
 				print Dumper(\%tmp);
 				next;
 			}
+
 			if(/notifyclientmoved/) {
 				my @datas = split / /, $_;
 				my %tmp;
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					if($key =~ /clid/) { $tmp{clid} = $value; }
 					$tmp{$key} = $value;
 				}
-				&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved. to channel id " . $tmp{ctid} . "");
+				if($clients[$tmp{clid}]) {
+					if($tmp{invokername}) {
+						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
+					}
+					else {
+						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid});
+					}
+				} else {
+					&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
+
+				}
 				print Dumper(\%tmp);
 				next;
 			}
-			if(/notifychanneldeleted/) {
+
+			if(/notifychannelcreated/) {
 				my @datas = split / /, $_;
 				my %tmp;
 				shift(@datas);
@@ -192,6 +203,20 @@ while (1) {
 					$tmp{$key} = $value;
 				}
 				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				print Dumper(\%tmp);
+				next;
+			}
+
+			if(/notifychanneldeleted/) {
+				my @datas = split / /, $_;
+				my %tmp;
+				shift(@datas);
+				while(@datas) {
+					my ($key, $value) = split /\s*=\s*/, shift(@datas);
+					if($key =~ /clid/) { $tmp{clid} = $value; }
+					$tmp{$key} = $value;
+				}
+				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
 				print Dumper(\%tmp);
 				next;
 			}
