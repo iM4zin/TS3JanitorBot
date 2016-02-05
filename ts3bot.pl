@@ -123,7 +123,7 @@ while (1) {
 				shift(@datas);
 				while(@datas) {
 					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					$tmp{$key} = $value;
+					$tmp{$key} = unescape($value);
 				}
 				$tmp{'time'} = time;
 				if($tmp{'client_type'} =~ /^0$/) {	#no server query
@@ -235,10 +235,10 @@ while (1) {
 
 sub escape {
 	$_=shift;
+	return if(!$_);
 	s/\\/\\\\/g;
 	s/\//\\\//g;
 	s/\ /\\s/g;
-
 	s/\|/\\p/g;
 	s/\a/\\a/g;
 #	s/\b/\\b/g;
@@ -252,6 +252,7 @@ sub escape {
 
 sub unescape {
 	$_=shift;
+	return if(!$_);
 	s/\\\\/\\/g;
 	s/\\\//\//g;
 	s/\\s/\ /g;
