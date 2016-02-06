@@ -90,6 +90,7 @@ while (1) {
 			}
 
 			if(/^notifytextmessage/) {
+				shift;
 				my %tmp = &parse;
 				&info("Got message from $tmp{invokername}: $tmp{msg}");
 				if(!checkop( $tmp{'invokeruid'} )) {
@@ -112,6 +113,7 @@ while (1) {
 			}
 			
 			if(/^notifycliententerview/) {
+				shift;
 				my %tmp = &parse;
 				$tmp{'time'} = time;
 
@@ -125,6 +127,7 @@ while (1) {
 			}
 	
 			if(/^notifyclientleftview/) {
+				shift;
 				my %tmp = &parse;
 
 				if(! $clients[$tmp{clid}]) {
@@ -154,6 +157,7 @@ while (1) {
 			}
 
 			if(/^notifyclientmoved/) {
+				shift;
 				my %tmp = &parse;
 
 				if($clients[$tmp{clid}]{client_nickname}) {
@@ -178,6 +182,7 @@ while (1) {
 			}
 
 			if(/^notifychannelcreated/) {
+				shift;
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
@@ -186,6 +191,7 @@ while (1) {
 			}
 
 			if(/^notifychanneldeleted/) {
+				shift;
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
@@ -194,6 +200,7 @@ while (1) {
 			}
 
 			if(/^notifychanneledited/) {
+				shift;
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
@@ -201,6 +208,7 @@ while (1) {
 				next;
 			}
 			if(/^notifychannelpasswordchanged/) {
+				shift;
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") password changed");
@@ -223,9 +231,8 @@ while (1) {
 sub parse {
 	my @datas = split / /, $_;
 	my %tmp;
-	shift(@datas);
 	while(@datas) {
-		my ($key, $value) = split /\s*=\s*/, shift(@datas);
+		my ($key, $value) = split /\s*=\s*/, shift(@datas), 2;
 		$tmp{$key} = unescape($value);
 	}
 	return %tmp;

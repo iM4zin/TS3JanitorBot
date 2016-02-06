@@ -1,10 +1,10 @@
-
 {
 	botname        => 'Janitor bot',
 
 	ops => [
-		'Z0vv8ay\\/UDZ4GbVNwKPDbfq57TU',
-		"asdf"
+		'Z0vv8ay/UDZ4GbVNwKPDbfq57TU=',	# Uuid owner name here
+		'RCcDagMhe34gY03rnltsv0oNAG0=',	# or any other comment
+		'another_unique_id'		# 
 	],
 
 	serveraddress  => '127.0.0.1',
