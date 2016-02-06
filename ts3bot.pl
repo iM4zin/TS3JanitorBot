@@ -71,11 +71,11 @@ while (1) {
 
 		foreach(@lines) {
 			chomp;
-			if(!/\S/ or /Welcome to the TeamSpeak 3/ or /^TS3$/) {
+			if(!/\S/ or /^Welcome to the TeamSpeak 3/ or /^TS3$/) {
 				next;
 			}
 
-			if(/error id=(\d+)/) {
+			if(/^error id=(\d+)/) {
 				if($1 !~ /^0$/) {
 					&info("error ". $1 ." \n");
 					close $sock;
@@ -89,14 +89,8 @@ while (1) {
 				next;
 			}
 
-			if(/notifytextmessage/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					$tmp{$key} = $value;
-				}
+			if(/^notifytextmessage/) {
+				my %tmp = &parse;
 				&info("Got message from $tmp{invokername}: $tmp{msg}");
 				if(!checkop( $tmp{'invokeruid'} )) {
 					next;
@@ -117,16 +111,11 @@ while (1) {
 				next;
 			}
 			
-			if(/notifycliententerview/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					$tmp{$key} = unescape($value);
-				}
+			if(/^notifycliententerview/) {
+				my %tmp = &parse;
 				$tmp{'time'} = time;
-				if($tmp{'client_type'} =~ /^0$/) {	#no server query
+
+				if(!defined $tmp{'client_type'} || $tmp{'client_type'} =~ /^0$/) {	#no server query
 					$clients[$tmp{clid}] = \%tmp;
 				}
 
@@ -135,14 +124,8 @@ while (1) {
 				next;
 			}
 	
-			if(/notifyclientleftview/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					$tmp{$key} = $value;
-				}
+			if(/^notifyclientleftview/) {
+				my %tmp = &parse;
 
 				if(! $clients[$tmp{clid}]) {
 					&info("Client (" . $tmp{clid} . ") disconnected.");
@@ -170,15 +153,10 @@ while (1) {
 				next;
 			}
 
-			if(/notifyclientmoved/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					$tmp{$key} = $value;
-				}
-				if($clients[$tmp{clid}]) {
+			if(/^notifyclientmoved/) {
+				my %tmp = &parse;
+
+				if($clients[$tmp{clid}]{client_nickname}) {
 					if($tmp{invokername}) {
 						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
 					}
@@ -186,37 +164,46 @@ while (1) {
 						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid});
 					}
 				} else {
-					&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
+					if($tmp{invokername}) {
+						&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
+					}
+					else {
+						&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid});
+					}
 
 				}
-				print Dumper(\%tmp);
+				$clients[$tmp{clid}]{ctid} = $tmp{ctid};
+#				print Dumper(\%tmp);
 				next;
 			}
 
-			if(/notifychannelcreated/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					if($key =~ /clid/) { $tmp{clid} = $value; }
-					$tmp{$key} = $value;
-				}
+			if(/^notifychannelcreated/) {
+				my %tmp = &parse;
+
 				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
 				print Dumper(\%tmp);
 				next;
 			}
 
-			if(/notifychanneldeleted/) {
-				my @datas = split / /, $_;
-				my %tmp;
-				shift(@datas);
-				while(@datas) {
-					my ($key, $value) = split /\s*=\s*/, shift(@datas);
-					if($key =~ /clid/) { $tmp{clid} = $value; }
-					$tmp{$key} = $value;
-				}
+			if(/^notifychanneldeleted/) {
+				my %tmp = &parse;
+
 				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				print Dumper(\%tmp);
+				next;
+			}
+
+			if(/^notifychanneledited/) {
+				my %tmp = &parse;
+
+				&info("Channel (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				print Dumper(\%tmp);
+				next;
+			}
+			if(/^notifychannelpasswordchanged/) {
+				my %tmp = &parse;
+
+				&info("Channel (" . $tmp{cid} . ") password changed");
 				print Dumper(\%tmp);
 				next;
 			}
@@ -231,6 +218,17 @@ while (1) {
 		&ts_silent("serverinfo");
 	}
 	sleep 1;
+}
+
+sub parse {
+	my @datas = split / /, $_;
+	my %tmp;
+	shift(@datas);
+	while(@datas) {
+		my ($key, $value) = split /\s*=\s*/, shift(@datas);
+		$tmp{$key} = unescape($value);
+	}
+	return %tmp;
 }
 
 sub escape {
@@ -253,7 +251,6 @@ sub escape {
 sub unescape {
 	$_=shift;
 	return if(!$_);
-	s/\\\\/\\/g;
 	s/\\\//\//g;
 	s/\\s/\ /g;
 	s/\\p/\|/g;
@@ -264,6 +261,7 @@ sub unescape {
 	s/\\r/\r/g;
 	s/\\t/\t/g;
 #	s/\\v/\v/g;
+	s/\\\\/\\/g;
 	return $_;
 }
 sub info {
