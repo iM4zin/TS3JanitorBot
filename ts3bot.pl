@@ -116,24 +116,28 @@ while (1) {
 				shift;
 				my %tmp = &parse;
 				$tmp{'time'} = time;
-
-				if(!defined $tmp{'client_type'} || $tmp{'client_type'} =~ /^0$/) {	#no server query
-					$clients[$tmp{clid}] = \%tmp;
-				}
+				$clients[$tmp{clid}] = \%tmp;
 
 				&info("Client " .$tmp{client_nickname}. "(" . $tmp{clid} . ") connected");
-				print Dumper(\%tmp);
+#				print Dumper(\%tmp);
 				next;
 			}
 	
 			if(/^notifyclientleftview/) {
 				shift;
 				my %tmp = &parse;
+				next if(!$clients[$tmp{clid}]);
 
-				if(! $clients[$tmp{clid}]) {
-					&info("Client (" . $tmp{clid} . ") disconnected.");
+				if(! $clients[$tmp{clid}]{'client_type'} =~ /^0$/) {
+					&info("Client (" . $tmp{clid} . ") disconnected. (unknow client type)");
+					print Dumper(\%tmp);
 				}
-				else {
+				elsif(
+				$clients[$tmp{clid}]{client_database_id} &&
+				$clients[$tmp{clid}]{client_unique_identifier} &&
+				$clients[$tmp{clid}]{client_nickname} &&
+				$clients[$tmp{clid}]{client_nickname}) {
+
 					&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
 					my $onlinetime = time - $clients[$tmp{clid}]{'time'};
 
@@ -150,9 +154,11 @@ while (1) {
 					) or die "Huh?" . $dbh->errstr;
 					$sh->finish;
 
+				} else {
+					&info("Client (" . $tmp{clid} . ") disconnected.");
+					print Dumper(\%tmp);
 				}
 				delete $clients[$tmp{clid}];
-				print Dumper(\%tmp);
 				next;
 			}
 
@@ -186,7 +192,7 @@ while (1) {
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-				print Dumper(\%tmp);
+#				print Dumper(\%tmp);
 				next;
 			}
 
@@ -195,7 +201,7 @@ while (1) {
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-				print Dumper(\%tmp);
+#				print Dumper(\%tmp);
 				next;
 			}
 
@@ -204,7 +210,7 @@ while (1) {
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-				print Dumper(\%tmp);
+#				print Dumper(\%tmp);
 				next;
 			}
 			if(/^notifychannelpasswordchanged/) {
@@ -212,7 +218,7 @@ while (1) {
 				my %tmp = &parse;
 
 				&info("Channel (" . $tmp{cid} . ") password changed");
-				print Dumper(\%tmp);
+#				print Dumper(\%tmp);
 				next;
 			}
 
