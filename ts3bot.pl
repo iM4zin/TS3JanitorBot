@@ -46,6 +46,8 @@ my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host="
 
 &stopbot("Could not create socket: $!") unless $sock;
 
+$dbh->do('set names utf8');
+
 my $botname = $config->{botname};
 
 &ts("use sid=" .$config->{serverid});
