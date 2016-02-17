@@ -63,11 +63,12 @@ my $botname = $config->{botname};
 &ts("servernotifyregister event=textprivate");
 
 &ts("clientupdate client_nickname=" . escape($botname));
-
+my $clientcounterhour = -1;
 my $pingtime = time;
 while (1) {
 	my $s;
 	while ($s = <$sock>) {
+		my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 		my @lines = ();
 		push @lines, split(/\r/, $s);
 
@@ -88,13 +89,15 @@ while (1) {
 
 			if(/virtualserver_clientsonline=(\d+)/) {
 				&info("Users online: " . ($1 - 1) . "\n");
+				if($hour != $clientcounterhour) {
 					my $sql = "INSERT INTO onlineclients (clients) VALUES (?);";
 					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
 					$sh->execute(
 						($1 - 1)
 					) or die "Huh?" . $dbh->errstr;
 					$sh->finish;
-
+					$clientcounterhour = $hour;
+				}
 				next;
 			}
 
