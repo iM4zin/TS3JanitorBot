@@ -88,6 +88,13 @@ while (1) {
 
 			if(/virtualserver_clientsonline=(\d+)/) {
 				&info("Users online: " . ($1 - 1) . "\n");
+					my $sql = "INSERT INTO onlineclients (clients) VALUES (?);";
+					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
+					$sh->execute(
+						($1 - 1)
+					) or die "Huh?" . $dbh->errstr;
+					$sh->finish;
+
 				next;
 			}
 
