@@ -14,7 +14,6 @@ die "Error reading config file: $!" unless defined $config;
 #syslog facility is local2 by default
 openlog(basename($0), "pid", "local2");
 
-
 if (-e $config->{pidfile}) {
         open PIDFILE,$config->{pidfile};
         my $p=<PIDFILE>;
@@ -31,18 +30,23 @@ close PIDFILE;
 
 &info("starting: $config->{botname}\n");
 
+my @clients;
+my @badch;
+my @badnick;
+&loadbaddata;
+
+# Connect to the database.
+my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host=" . $config->{db_host} . "",
+	$config->{db_username}, $config->{db_password},
+	{'RaiseError' => 1});
+
 my $sock = new IO::Socket::INET (
 	PeerAddr => $config->{serveraddress},
 	PeerPort => $config->{serverport},
 	Proto => 'tcp',
 	Blocking => 0,
 ); 
-my @clients;
 
-# Connect to the database.
-my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host=" . $config->{db_host} . "",
-	$config->{db_username}, $config->{db_password},
-	{'RaiseError' => 1});
 
 &stopbot("Could not create socket: $!") unless $sock;
 
@@ -120,7 +124,13 @@ while (1) {
 					}
 					print "Total: $count\n";
 				}
-				print Dumper(\%tmp);
+				if($tmp{msg} =~ /\!testbad (.*)/) {
+					my $c =checkbadch($1);
+					my $n =checkbadnick($1);
+					if($c) {print "found bad ch: $c\n";}
+					if($n) {print "found bad nick: $n\n";}
+				}
+				print "\n" . Dumper(\%tmp);
 				next;
 			}
 			
@@ -326,15 +336,45 @@ sub stopbot {
 	die;
 }
 
+sub loadbaddata {
+	@badch = do {
+	    open my $fh, "<", "badchannel.txt"
+	        or die "could not open badchannel.txt: $!";
+	    <$fh>;
+	};
+	for (@badch) { s/\r[\n]*//gm; }
+
+	@badnick = do {
+	    open my $fh, "<", "badnick.txt"
+	        or die "could not open badnick.txt: $!";
+	    <$fh>;
+	};
+	for (@badch) { s/\r[\n]*//gm; }
+
+}
+
 sub checkop {
 	my $uid = shift;
-	foreach my $o ($config->{ops}) {
+	for my $o ($config->{ops}) {
 		if($uid eq $o) {
 			return 1;
 		}
 	}
 }
 
+sub checkbadch {
+	my $i = shift;
+	for (@badch) {
+		if ($i =~ $_) { return "$i is in patterns (matches $_)\n"; }
+	}
+}
+
+sub checkbadnick {
+	my $i = shift;
+	for (@badnick) {
+		if ($i =~ $_) { return "$i is in patterns (matches $_)\n"; }
+	}
+}
 
 die "end";
 
