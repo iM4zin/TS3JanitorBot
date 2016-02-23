@@ -127,8 +127,9 @@ while (1) {
 				if($tmp{msg} =~ /\!testbad (.*)/) {
 					my $c =checkbadch($1);
 					my $n =checkbadnick($1);
-					if($c) {print "found bad ch: $c\n";}
-					if($n) {print "found bad nick: $n\n";}
+					if($c) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("chan: $c")); }
+					if($n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("nick: $n")); }
+					if(!$c and !$n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("No bad string found")); }
 				}
 				print "\n" . Dumper(\%tmp);
 				next;
@@ -343,21 +344,27 @@ sub loadbaddata {
 	    <$fh>;
 	};
 	for (@badch) { s/\r[\n]*//gm; }
+	@badch = grep { $_ ne '' } @badch;
+	@badch = grep { $_ ne /^\#/ } @badch;
 
 	@badnick = do {
 	    open my $fh, "<", "badnick.txt"
 	        or die "could not open badnick.txt: $!";
 	    <$fh>;
 	};
-	for (@badch) { s/\r[\n]*//gm; }
-
+	for (@badnick) { s/\r[\n]*//gm; }
+	@badnick = grep { $_ ne '' } @badnick;
+	@badnick = grep { $_ ne /^\#/ } @badnick;
 }
 
 sub checkop {
 	my $uid = shift;
-	for my $o ($config->{ops}) {
+	print Dumper(\$config)."\n";
+	foreach my $o (@{$config->{ops}}) {
+		print "$uid\n$o\n\n";
 		if($uid eq $o) {
 			return 1;
+			next;
 		}
 	}
 }
@@ -365,14 +372,14 @@ sub checkop {
 sub checkbadch {
 	my $i = shift;
 	for (@badch) {
-		if ($i =~ $_) { return "$i is in patterns (matches $_)\n"; }
+		if ($i =~ /$_/i) { return "\"$i\" is in patterns (matches $_)"; }
 	}
 }
 
 sub checkbadnick {
 	my $i = shift;
 	for (@badnick) {
-		if ($i =~ $_) { return "$i is in patterns (matches $_)\n"; }
+		if ($i =~ /$_/i) { return "\"$i\" is in patterns (matches $_)"; }
 	}
 }
 
