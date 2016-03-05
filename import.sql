@@ -16,3 +16,15 @@ CREATE TABLE IF NOT EXISTS `onlineclients` (
   `clients` smallint(5) unsigned NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 ALTER TABLE `onlineclients` ADD UNIQUE(`time`);
+
+CREATE TABLE IF NOT EXISTS `kicks` (
+  `client_id` int(10) unsigned NOT NULL,
+  `client_unique_identifier` varchar(40) NOT NULL,
+  `nickname` varchar(128) NOT NULL,
+  `onlinetime` bigint(20) unsigned NOT NULL,
+  `reasonid` tinyint(3) unsigned NOT NULL,
+  `reasonmsg` varchar(128) NOT NULL,
+  `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+ALTER TABLE `kicks`
+  ADD KEY `client_id` (`client_id`), ADD KEY `client_unique_identifier` (`client_unique_identifier`);

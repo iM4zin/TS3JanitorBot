@@ -33,6 +33,8 @@ close PIDFILE;
 my @clients;
 my @badch;
 my @badnick;
+my @cmdqueue;
+my $wait_response = 0;
 &loadbaddata;
 
 # Connect to the database.
@@ -55,7 +57,7 @@ $dbh->do('set names utf8');
 my $botname = $config->{botname};
 
 &ts("use sid=" .$config->{serverid});
-&ts_silent("login client_login_name=" .$config->{serveruser}. " client_login_password=" .$config->{serverpass});
+&ts("login client_login_name=" .$config->{serveruser}. " client_login_password=" .$config->{serverpass});
 &ts("serverinfo");
 &ts("servernotifyregister event=textprivate");
 #&ts("servernotifyregister event=server");
@@ -86,6 +88,10 @@ while (1) {
 				if($1 !~ /^0$/) {
 					&info("error ". $1 ." \n");
 					close $sock;
+				}
+				else {
+					print "ok\n";
+					$wait_response = 0;
 				}
 				next;
 			}
@@ -131,7 +137,6 @@ while (1) {
 					if($n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("nick: $n")); }
 					if(!$c and !$n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("No bad string found")); }
 				}
-				print "\n" . Dumper(\%tmp);
 				next;
 			}
 			
@@ -153,7 +158,6 @@ while (1) {
 
 				if(! $clients[$tmp{clid}]{'client_type'} =~ /^0$/) {
 					&info("Client (" . $tmp{clid} . ") disconnected. (unknow client type)");
-					print Dumper(\%tmp);
 				}
 				elsif(
 				$clients[$tmp{clid}]{client_database_id} &&
@@ -161,11 +165,8 @@ while (1) {
 				$clients[$tmp{clid}]{client_nickname} &&
 				$clients[$tmp{clid}]{client_nickname}) {
 
-					&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
 					my $onlinetime = time - $clients[$tmp{clid}]{'time'};
-
 					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, nickname, onlinetime) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?, nickname=?, connectioncount=connectioncount+1;";
-
 					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
 					$sh->execute(
 						$clients[$tmp{clid}]{client_database_id},
@@ -177,9 +178,30 @@ while (1) {
 					) or die "Huh?" . $dbh->errstr;
 					$sh->finish;
 
+					if($tmp{reasonid} == 5) {
+						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") kicked. Online time " . (time - $clients[$tmp{clid}]{'time'}));
+
+						my $onlinetime = time - $clients[$tmp{clid}]{'time'};
+						my $sql = "INSERT INTO kicks (client_id, client_unique_identifier, nickname, onlinetime, reasonid, reasonmsg) VALUES (?, ?, ?, ?, ?, ?);";
+						my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
+						$sh->execute(
+							$clients[$tmp{clid}]{client_database_id},
+							$clients[$tmp{clid}]{client_unique_identifier},
+							$clients[$tmp{clid}]{client_nickname},
+							$onlinetime,
+							$tmp{reasonid},
+							$tmp{reasonmsg},
+						) or die "Huh?" . $dbh->errstr;
+						$sh->finish;
+					}
+					else {
+						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
+					}
+
+
+
 				} else {
 					&info("Client (" . $tmp{clid} . ") disconnected.");
-					print Dumper(\%tmp);
 				}
 				delete $clients[$tmp{clid}];
 				next;
@@ -206,7 +228,7 @@ while (1) {
 
 				}
 				$clients[$tmp{clid}]{ctid} = $tmp{ctid};
-#				print Dumper(\%tmp);
+				print Dumper(\%tmp);
 				next;
 			}
 
@@ -250,11 +272,18 @@ while (1) {
 		}
 	}
 
+	if(scalar(grep {defined $_} @cmdqueue) > 0 && $wait_response == 0) {
+		my $msg = shift @cmdqueue;
+		$wait_response=1;
+		print $sock $msg . "\n";
+		print STDERR scalar localtime() . " Sent: $msg\n";
+	}
+
 	if($pingtime < time - 60) {
 		$pingtime = time;
-		&ts_silent("serverinfo");
+		&ts("serverinfo");
 	}
-	sleep 1;
+	sleep 0.2;
 }
 
 sub parse {
@@ -319,15 +348,9 @@ sub fatal {
 sub ts {
 	my $msg = shift;
 	chomp $msg;
-	print $sock $msg . "\n";
-	print STDERR scalar localtime() . " Sent: $msg\n";
+	push(@cmdqueue, $msg);
 }
-sub ts_silent {
-	my $msg = shift;
-	chomp $msg;
-	print $sock $msg . "\n";
-	#print STDERR scalar localtime() . " Sent: $msg\n";
-}
+
 sub stopbot {
 	my $msg = shift;
 	chomp $msg;
@@ -359,7 +382,6 @@ sub loadbaddata {
 
 sub checkop {
 	my $uid = shift;
-	print Dumper(\$config)."\n";
 	foreach my $o (@{$config->{ops}}) {
 		print "$uid\n$o\n\n";
 		if($uid eq $o) {
