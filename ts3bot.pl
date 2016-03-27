@@ -259,8 +259,8 @@ while (1) {
 				shift;
 				my %tmp = &parse;
 
-				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . ($tmp{invokerid}? "(".$tmp{invokerid}.")" : ""));
-#				print Dumper(\%tmp);
+				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . ($tmp{invokerid}? "(".$tmp{invokerid}.")" : ""));
+				print Dumper(\%tmp);
 				next;
 			}
 
