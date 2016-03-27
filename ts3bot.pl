@@ -125,11 +125,16 @@ while (1) {
 						if($c->{clid}) {
 							print $c->{clid} . " " . $c->{client_unique_identifier} . " " . $c->{client_nickname} ."\n";
 							$count++;
-#							print Dumper(\%c);
+							#print Dumper(\%c);
 						}
 					}
 					print "Total: $count\n";
 				}
+
+				if($tmp{msg} =~ /\!test/) {
+					notifyop("OP NOTIFY: "."testfunction");
+				}
+
 				if($tmp{msg} =~ /\!testbad (.*)/) {
 					my $c =checkbadch($1);
 					my $n =checkbadnick($1);
@@ -148,6 +153,10 @@ while (1) {
 
 				&info("Client " .$tmp{client_nickname}. "(" . $tmp{clid} . ") connected");
 #				print Dumper(\%tmp);
+				my $msg =checkbadnick($tmp{client_nickname});
+				if($msg) {
+					notifyop($msg);
+				}
 				next;
 			}
 	
@@ -228,7 +237,7 @@ while (1) {
 
 				}
 				$clients[$tmp{clid}]{ctid} = $tmp{ctid};
-				print Dumper(\%tmp);
+				#print Dumper(\%tmp);
 				next;
 			}
 
@@ -236,8 +245,13 @@ while (1) {
 				shift;
 				my %tmp = &parse;
 
-				&info("Channel (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-#				print Dumper(\%tmp);
+				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				#print Dumper(\%tmp);
+				my $msg =checkbadch($tmp{channel_name});
+				if($msg) {
+					notifyop("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+					notifyop($msg);
+				}
 				next;
 			}
 
@@ -245,7 +259,7 @@ while (1) {
 				shift;
 				my %tmp = &parse;
 
-				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . ($tmp{invokerid}? "(".$tmp{invokerid}.")" : ""));
+				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . ($tmp{invokerid}? "(".$tmp{invokerid}.")" : ""));
 #				print Dumper(\%tmp);
 				next;
 			}
@@ -254,7 +268,7 @@ while (1) {
 				shift;
 				my %tmp = &parse;
 
-				&info("Channel (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
+				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
 #				print Dumper(\%tmp);
 				next;
 			}
@@ -264,6 +278,14 @@ while (1) {
 
 				&info("Channel (" . $tmp{cid} . ") password changed");
 #				print Dumper(\%tmp);
+				next;
+			}
+			if(/^notifychanneldescriptionchanged/) {
+				shift;
+				my %tmp = &parse;
+
+				&info("Channel (" . $tmp{cid} . ") password changed");
+				#print Dumper(\%tmp);
 				next;
 			}
 
@@ -383,7 +405,7 @@ sub loadbaddata {
 sub checkop {
 	my $uid = shift;
 	foreach my $o (@{$config->{ops}}) {
-		print "$uid\n$o\n\n";
+		#print "checkop: $uid\n$o\n\n";
 		if($uid eq $o) {
 			return 1;
 			next;
@@ -391,6 +413,17 @@ sub checkop {
 	}
 }
 
+sub notifyop {
+	my $msg = shift;
+	&info("notifyop: $msg\n");
+	foreach my $c (@clients) {
+		if($c->{clid}) {
+			if(checkop($c->{client_unique_identifier})) {
+				&ts("sendtextmessage targetmode=1 target=$c->{clid} msg=" . escape($msg));
+			}
+		}
+	}
+}
 sub checkbadch {
 	my $i = shift;
 	for (@badch) {
