@@ -250,6 +250,7 @@ while (1) {
 			if(/^notifyclientmoved/) {
 				shift;
 				my %tmp = &parse;
+				next if(defined $clients[$tmp{clid}]{ctid} and $clients[$tmp{clid}]{ctid} == $tmp{ctid});
 
 				if($clients[$tmp{clid}]{client_nickname}) {
 					if($tmp{invokername}) {
