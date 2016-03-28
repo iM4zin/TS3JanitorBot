@@ -37,6 +37,7 @@ my @badch;
 my @badnick;
 my @cmdqueue;
 my $wait_response = 0;
+my $last_cmd;
 &loadbaddata;
 
 # Connect to the database.
@@ -71,6 +72,7 @@ my $botname = $config->{botname};
 &ts("servernotifyregister event=textprivate");
 
 &ts("clientupdate client_nickname=" . escape($botname));
+&ts("clientlist -uid");
 my $clientcounterhour = -1;
 my $pingtime = time;
 while (1) {
@@ -154,8 +156,10 @@ while (1) {
 							else {
 								$t=nearest(.01, $ref->{'onlinetime'}/(60*60*24))."d";
 							}
+							my $urlescape = $c->{client_nickname};
+							$urlescape =~ s/ /%20/g;
 							print "Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}. "\n";
-							&ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}));
+							&ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("Nickname: [URL=client://".$c->{clid}."/".$c->{client_unique_identifier}."~".$urlescape."]".$c->{client_nickname}."[/URL], time: " .$t. ", count: " .$ref->{'connectioncount'}));
 						}
 						$sth->finish();
 					}
@@ -316,7 +320,34 @@ while (1) {
 				next;
 			}
 
-			print "Unknow command: " . $_."\n";
+			if($wait_response) {
+				if($last_cmd =~ /^clientlist/) {
+					my @clientlines	;
+					print "recieving clientlist\n";
+					push @clientlines, split(/\|/, $_);
+					#print Dumper(\@clientlines);
+					foreach(@clientlines) {
+						chomp;
+						my %tmp = &parse;
+						$tmp{'time'} = time;
+						#print Dumper(\%tmp);
+						if(!defined($tmp{'client_type'}) or $tmp{'client_type'} =~ /^0$/) {
+							&info("Already connected client: $tmp{client_nickname}");
+							$clients[$tmp{clid}] = \%tmp;
+						}
+						else {
+							&info("Already connected wrong type client: $tmp{client_nickname}");
+						}
+					}
+				}
+				else {
+					print "Unknow response\n";
+				}
+			}
+			else {
+				print "Unknow command: " . $_."\n";
+			}
+		
 				
 		}
 	}
@@ -324,6 +355,7 @@ while (1) {
 	if(scalar(grep {defined $_} @cmdqueue) > 0 && $wait_response == 0) {
 		my $msg = shift @cmdqueue;
 		$wait_response=1;
+		$last_cmd = $msg;
 		print $sock $msg . "\n";
 		print STDERR scalar localtime() . " Sent: $msg\n";
 	}
