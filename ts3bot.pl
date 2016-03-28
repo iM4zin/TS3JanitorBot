@@ -5,6 +5,8 @@ use IO::Socket;
 use DBI;
 use Data::Dumper;
 use warnings; use strict;
+use Math::Round;
+
 
 my $config=do("conf.pl");
 
@@ -72,11 +74,11 @@ my $botname = $config->{botname};
 my $clientcounterhour = -1;
 my $pingtime = time;
 while (1) {
-	my $s;
-	while ($s = <$sock>) {
+	my $socket_data;
+	while ($socket_data = <$sock>) {
 		my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 		my @lines = ();
-		push @lines, split(/\r/, $s);
+		push @lines, split(/\r/, $socket_data);
 
 		foreach(@lines) {
 			chomp;
@@ -132,7 +134,32 @@ while (1) {
 				}
 
 				if($tmp{msg} =~ /\!test/) {
-					notifyop("OP NOTIFY: "."testfunction");
+					# now retrieve data from the table.
+					foreach my $c (@clients) {
+						my $sth = $dbh->prepare("SELECT * FROM onlinetime WHERE client_unique_identifier LIKE ?;");
+						$sth->execute(
+							$c->{client_unique_identifier}
+						);
+						while (my $ref = $sth->fetchrow_hashref()) {
+							my $t;
+							if($ref->{'onlinetime'} < 60) {
+								$t=$ref->{'onlinetime'}."s";
+							}
+							elsif($ref->{'onlinetime'} < 60*60) {
+								$t=nearest(.01, $ref->{'onlinetime'}/60)."m";
+							}
+							elsif($ref->{'onlinetime'} < 60*60*24) {
+								$t=nearest(.01, $ref->{'onlinetime'}/(60*60))."h";
+							}
+							else {
+								$t=nearest(.01, $ref->{'onlinetime'}/(60*60*24))."d";
+							}
+							print "Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}. "\n";
+							&ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}));
+						}
+						$sth->finish();
+					}
+
 				}
 
 				if($tmp{msg} =~ /\!testbad (.*)/) {
