@@ -28,3 +28,4 @@ CREATE TABLE IF NOT EXISTS `kicks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 ALTER TABLE `kicks`
   ADD KEY `client_id` (`client_id`), ADD KEY `client_unique_identifier` (`client_unique_identifier`);
+ALTER TABLE `kicks` CHANGE `reasonmsg` `reasonmsg` VARCHAR(128) CHARACTER SET utf8 COLLATE utf8_swedish_ci NULL;
