@@ -1,12 +1,14 @@
 #!/usr/bin/perl
+package ts3bot;
+use warnings; use strict;
 use Sys::Syslog qw(:DEFAULT setlogsock);
 use File::Basename;
 use IO::Socket;
 use DBI;
 use Data::Dumper;
-use warnings; use strict;
 use Math::Round;
-
+use ts3bot::Commands;
+use ts3bot::Response;
 
 my $config=do("conf.pl");
 
@@ -32,16 +34,17 @@ close PIDFILE;
 
 &info("starting: $config->{botname}\n");
 
-my @clients;
-my @badch;
-my @badnick;
-my @cmdqueue;
-my $wait_response = 0;
-my $last_cmd;
+our @clients;
+our @channels;
+our @badch;
+our @badnick;
+our @cmdqueue;
+our $wait_response = 0;
+our $last_cmd;
 &loadbaddata;
 
 # Connect to the database.
-my $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host=" . $config->{db_host} . "",
+our $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host=" . $config->{db_host} . "",
 	$config->{db_username}, $config->{db_password},
 	{'RaiseError' => 1});
 
@@ -73,10 +76,13 @@ my $botname = $config->{botname};
 
 &ts("clientupdate client_nickname=" . escape($botname));
 &ts("clientlist -uid");
-my $clientcounterhour = -1;
+
 my $pingtime = time;
 while (1) {
 	my $socket_data;
+	if(!$sock) {
+		print "No connection\n";
+	}
 	while ($socket_data = <$sock>) {
 		my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 		my @lines = ();
@@ -94,230 +100,40 @@ while (1) {
 					close $sock;
 				}
 				else {
-					print "ok\n";
 					$wait_response = 0;
 				}
 				next;
 			}
 		
-
-			if(/virtualserver_clientsonline=(\d+)/) {
-				&info("Users online: " . ($1 - 1) . "\n");
-				if($hour != $clientcounterhour) {
-					my $sql = "INSERT INTO onlineclients (clients) VALUES (?);";
-					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
-					$sh->execute(
-						($1 - 1)
-					) or die "Huh?" . $dbh->errstr;
-					$sh->finish;
-					$clientcounterhour = $hour;
-				}
-				next;
-			}
+			if(/virtualserver_clientsonline=(\d+)/) { ts3bot::Response::resp_virtualserver_clientsonline(); next;}
+			if(/^notifycliententerview/) { ts3bot::Response::resp_notifycliententerview(); next;}
+			if(/^notifyclientleftview/) { ts3bot::Response::resp_notifyclientleftview(); next;}
+			if(/^notifyclientmoved/) { ts3bot::Response::resp_notifyclientmoved(); next;}
+			if(/^notifychannelcreated/) { ts3bot::Response::resp_notifychannelcreated(); next;}
+			if(/^notifychanneldeleted/) { ts3bot::Response::resp_notifychanneldeleted(); next;}
+			if(/^notifychanneledited/) { ts3bot::Response::resp_notifychanneledited(); next;}
+			if(/^notifychannelpasswordchanged/) { ts3bot::Response::resp_notifychannelpasswordchanged(); next;}
+			if(/^notifychanneldescriptionchanged/) { ts3bot::Response::resp_notifychanneldescriptionchanged(); next;}
 
 			if(/^notifytextmessage/) {
 				shift;
-				my %tmp = &parse;
-				&info("Got message from $tmp{invokername}: $tmp{msg}");
+				my %tmp = &ts3bot::Response::parse;
+
+				# Check is command
+				if(!$tmp{'msg'} =~ /^\!/) {
+					next;
+				}
+
+				&info("Got command from $tmp{invokername}: $tmp{msg}");
+
+				# Check is op
 				if(!checkop( $tmp{'invokeruid'} )) {
 					next;
 				}
 
-				if($tmp{msg} =~ /\!dump/) {
-					my $count = 0;
-					foreach my $c (@clients) {
-						if($c->{clid}) {
-							print $c->{clid} . " " . $c->{client_unique_identifier} . " " . $c->{client_nickname} ."\n";
-							$count++;
-							#print Dumper(\%c);
-						}
-					}
-					print "Total: $count\n";
-				}
-
-				if($tmp{msg} =~ /\!test/) {
-					# now retrieve data from the table.
-					foreach my $c (@clients) {
-						my $sth = $dbh->prepare("SELECT * FROM onlinetime WHERE client_unique_identifier LIKE ?;");
-						$sth->execute(
-							$c->{client_unique_identifier}
-						);
-						while (my $ref = $sth->fetchrow_hashref()) {
-							my $t;
-							if($ref->{'onlinetime'} < 60) {
-								$t=$ref->{'onlinetime'}."s";
-							}
-							elsif($ref->{'onlinetime'} < 60*60) {
-								$t=nearest(.01, $ref->{'onlinetime'}/60)."m";
-							}
-							elsif($ref->{'onlinetime'} < 60*60*24) {
-								$t=nearest(.01, $ref->{'onlinetime'}/(60*60))."h";
-							}
-							else {
-								$t=nearest(.01, $ref->{'onlinetime'}/(60*60*24))."d";
-							}
-							my $urlescape = $c->{client_nickname};
-							$urlescape =~ s/ /%20/g;
-							print "Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}. "\n";
-							&ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("Nickname: [URL=client://".$c->{clid}."/".$c->{client_unique_identifier}."~".$urlescape."]".$c->{client_nickname}."[/URL], time: " .$t. ", count: " .$ref->{'connectioncount'}));
-						}
-						$sth->finish();
-					}
-
-				}
-
-				if($tmp{msg} =~ /\!testbad (.*)/) {
-					my $c =checkbadch($1);
-					my $n =checkbadnick($1);
-					if($c) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("chan: $c")); }
-					if($n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("nick: $n")); }
-					if(!$c and !$n) { &ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . escape("No bad string found")); }
-				}
-				next;
-			}
-			
-			if(/^notifycliententerview/) {
-				shift;
-				my %tmp = &parse;
-				$tmp{'time'} = time;
-				$clients[$tmp{clid}] = \%tmp;
-
-				&info("Client " .$tmp{client_nickname}. "(" . $tmp{clid} . ") connected");
-#				print Dumper(\%tmp);
-				my $msg =checkbadnick($tmp{client_nickname});
-				if($msg) {
-					notifyop($msg);
-				}
-				next;
-			}
-	
-			if(/^notifyclientleftview/) {
-				shift;
-				my %tmp = &parse;
-				next if(!$clients[$tmp{clid}]);
-
-				if(! $clients[$tmp{clid}]{'client_type'} =~ /^0$/) {
-					&info("Client (" . $tmp{clid} . ") disconnected. (unknow client type)");
-				}
-				elsif(
-				$clients[$tmp{clid}]{client_database_id} &&
-				$clients[$tmp{clid}]{client_unique_identifier} &&
-				$clients[$tmp{clid}]{client_nickname} &&
-				$clients[$tmp{clid}]{client_nickname}) {
-
-					my $onlinetime = time - $clients[$tmp{clid}]{'time'};
-					my $sql = "INSERT INTO onlinetime (client_id, client_unique_identifier, nickname, onlinetime) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE onlinetime=onlinetime+?, nickname=?, connectioncount=connectioncount+1;";
-					my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
-					$sh->execute(
-						$clients[$tmp{clid}]{client_database_id},
-						$clients[$tmp{clid}]{client_unique_identifier},
-						$clients[$tmp{clid}]{client_nickname},
-						$onlinetime,
-						$onlinetime,
-						$clients[$tmp{clid}]{client_nickname}
-					) or die "Huh?" . $dbh->errstr;
-					$sh->finish;
-
-					if($tmp{reasonid} == 5) {
-						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") kicked. Online time " . (time - $clients[$tmp{clid}]{'time'}));
-
-						my $onlinetime = time - $clients[$tmp{clid}]{'time'};
-						my $sql = "INSERT INTO kicks (client_id, client_unique_identifier, nickname, onlinetime, reasonid, reasonmsg) VALUES (?, ?, ?, ?, ?, ?);";
-						my $sh = $dbh->prepare( $sql ) or die "huh?" . $dbh->errstr;
-						$sh->execute(
-							$clients[$tmp{clid}]{client_database_id},
-							$clients[$tmp{clid}]{client_unique_identifier},
-							$clients[$tmp{clid}]{client_nickname},
-							$onlinetime,
-							$tmp{reasonid},
-							$tmp{reasonmsg},
-						) or die "Huh?" . $dbh->errstr;
-						$sh->finish;
-					}
-					else {
-						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") disconnected. Online time " . (time - $clients[$tmp{clid}]{'time'}));
-					}
-
-
-
-				} else {
-					&info("Client (" . $tmp{clid} . ") disconnected.");
-				}
-				delete $clients[$tmp{clid}];
-				next;
-			}
-
-			if(/^notifyclientmoved/) {
-				shift;
-				my %tmp = &parse;
-				next if(defined $clients[$tmp{clid}]{ctid} and $clients[$tmp{clid}]{ctid} == $tmp{ctid});
-
-				if($clients[$tmp{clid}]{client_nickname}) {
-					if($tmp{invokername}) {
-						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
-					}
-					else {
-						&info("Client " . $clients[$tmp{clid}]{client_nickname} . "(" . $tmp{clid} . ") moved to channel id " . $tmp{ctid});
-					}
-				} else {
-					if($tmp{invokername}) {
-						&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid} . " by " . $tmp{invokername});
-					}
-					else {
-						&info("Client (" . $tmp{clid} . ") moved to channel id " . $tmp{ctid});
-					}
-
-				}
-				$clients[$tmp{clid}]{ctid} = $tmp{ctid};
-				#print Dumper(\%tmp);
-				next;
-			}
-
-			if(/^notifychannelcreated/) {
-				shift;
-				my %tmp = &parse;
-
-				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-				#print Dumper(\%tmp);
-				my $msg =checkbadch($tmp{channel_name});
-				if($msg) {
-					notifyop("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") created by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-					notifyop($msg);
-				}
-				next;
-			}
-
-			if(/^notifychanneldeleted/) {
-				shift;
-				my %tmp = &parse;
-
-				&info("Channel (" . $tmp{cid} . ") deleted by " . $tmp{invokername} . ($tmp{invokerid}? "(".$tmp{invokerid}.")" : ""));
-				print Dumper(\%tmp);
-				next;
-			}
-
-			if(/^notifychanneledited/) {
-				shift;
-				my %tmp = &parse;
-
-				&info("Channel " . $tmp{channel_name} . " (" . $tmp{cid} . ") edited by " . $tmp{invokername} . "(" . $tmp{invokerid} . ")");
-#				print Dumper(\%tmp);
-				next;
-			}
-			if(/^notifychannelpasswordchanged/) {
-				shift;
-				my %tmp = &parse;
-
-				&info("Channel (" . $tmp{cid} . ") password changed");
-#				print Dumper(\%tmp);
-				next;
-			}
-			if(/^notifychanneldescriptionchanged/) {
-				shift;
-				my %tmp = &parse;
-
-				&info("Channel (" . $tmp{cid} . ") password changed");
-				#print Dumper(\%tmp);
+				if($tmp{msg} =~ /\!dump /) { ts3bot::Commands::cmd_dump(%tmp); next; }
+				if($tmp{msg} =~ /\!test /) { ts3bot::Commands::cmd_test(%tmp); next; }
+				if($tmp{msg} =~ /\!testbad (.*)/) { ts3bot::Commands::cmd_testbad(%tmp); next; }
 				next;
 			}
 
@@ -329,7 +145,7 @@ while (1) {
 					#print Dumper(\@clientlines);
 					foreach(@clientlines) {
 						chomp;
-						my %tmp = &parse;
+						my %tmp = &ts3bot::Response::parse;
 						$tmp{'time'} = time;
 						#print Dumper(\%tmp);
 						if(!defined($tmp{'client_type'}) or $tmp{'client_type'} =~ /^0$/) {
@@ -368,15 +184,7 @@ while (1) {
 	sleep 0.2;
 }
 
-sub parse {
-	my @datas = split / /, $_;
-	my %tmp;
-	while(@datas) {
-		my ($key, $value) = split /\s*=\s*/, shift(@datas), 2;
-		$tmp{$key} = unescape($value);
-	}
-	return %tmp;
-}
+
 
 sub escape {
 	$_=shift;
@@ -497,6 +305,8 @@ sub checkbadnick {
 		if ($i =~ /$_/i) { return "\"$i\" is in patterns (matches $_)"; }
 	}
 }
+
+
 
 die "end";
 
