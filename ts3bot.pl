@@ -131,8 +131,8 @@ while (1) {
 					next;
 				}
 
-				if($tmp{msg} =~ /\!dump /) { ts3bot::Commands::cmd_dump(%tmp); next; }
-				if($tmp{msg} =~ /\!test /) { ts3bot::Commands::cmd_test(%tmp); next; }
+				if($tmp{msg} =~ /\!dump/) { ts3bot::Commands::cmd_dump(%tmp); next; }
+				if($tmp{msg} =~ /\!test/) { ts3bot::Commands::cmd_test(%tmp); next; }
 				if($tmp{msg} =~ /\!testbad (.*)/) { ts3bot::Commands::cmd_testbad(%tmp); next; }
 				next;
 			}
