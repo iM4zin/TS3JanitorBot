@@ -173,7 +173,7 @@ while (1) {
 		exit;
 	}
 
-	sleep 0.2;
+	sleep 1.0;
 }
 
 
