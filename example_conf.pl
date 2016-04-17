@@ -17,6 +17,8 @@
 	db_username    => 'ts3db_username_here',
 	db_password    => 'ts3db_password_here',
 	db_database    => 'ts3db_database_here',
+	db_infotable   => 'ts3bot_info',
+	db_kicktable   => 'ts3bot_kick',
 
 	pidfile        => './ts3bot.pid',
 }

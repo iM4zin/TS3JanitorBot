@@ -2,15 +2,16 @@
 package ts3bot;
 use warnings; use strict;
 use Sys::Syslog qw(:DEFAULT setlogsock);
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 use File::Basename;
 use IO::Socket;
 use DBI;
 use Data::Dumper;
 use Math::Round;
+use ts3bot::Notify;
 use ts3bot::Commands;
-use ts3bot::Response;
 
-my $config=do("conf.pl");
+our $config=do("conf.pl");
 
 die "Error parsing config file: $@" if $@;
 die "Error reading config file: $!" unless defined $config;
@@ -41,7 +42,12 @@ our @badnick;
 our @cmdqueue;
 our $wait_response = 0;
 our $last_cmd;
+our $my_client_id;
 &loadbaddata;
+
+our $EXIT = 0;
+
+$SIG{INT} = sub{ $EXIT = 1 };
 
 # Connect to the database.
 our $dbh = DBI->connect("DBI:mysql:database=" . $config->{db_database} . ";host=" . $config->{db_host} . "",
@@ -64,6 +70,7 @@ my $botname = $config->{botname};
 
 &ts("use sid=" .$config->{serverid});
 &ts("login client_login_name=" .$config->{serveruser}. " client_login_password=" .$config->{serverpass});
+&ts("clientupdate client_nickname=" . escape($botname));
 &ts("serverinfo");
 &ts("servernotifyregister event=textprivate");
 #&ts("servernotifyregister event=server");
@@ -74,7 +81,7 @@ my $botname = $config->{botname};
 &ts("servernotifyregister event=textchannel");
 &ts("servernotifyregister event=textprivate");
 
-&ts("clientupdate client_nickname=" . escape($botname));
+&ts("whoami");
 &ts("clientlist -uid");
 
 my $pingtime = time;
@@ -104,62 +111,34 @@ while (1) {
 				}
 				next;
 			}
-		
-			if(/virtualserver_clientsonline=(\d+)/) { ts3bot::Response::resp_virtualserver_clientsonline(); next;}
-			if(/^notifycliententerview/) { ts3bot::Response::resp_notifycliententerview(); next;}
-			if(/^notifyclientleftview/) { ts3bot::Response::resp_notifyclientleftview(); next;}
-			if(/^notifyclientmoved/) { ts3bot::Response::resp_notifyclientmoved(); next;}
-			if(/^notifychannelcreated/) { ts3bot::Response::resp_notifychannelcreated(); next;}
-			if(/^notifychanneldeleted/) { ts3bot::Response::resp_notifychanneldeleted(); next;}
-			if(/^notifychanneledited/) { ts3bot::Response::resp_notifychanneledited(); next;}
-			if(/^notifychannelpasswordchanged/) { ts3bot::Response::resp_notifychannelpasswordchanged(); next;}
-			if(/^notifychanneldescriptionchanged/) { ts3bot::Response::resp_notifychanneldescriptionchanged(); next;}
 
-			if(/^notifytextmessage/) {
-				shift;
-				my %tmp = &ts3bot::Response::parse;
+			if(/virtualserver_clientsonline=(\d+)/) { ts3bot::Notify::virtualserver_clientsonline(); next;}
+			if(/^notifycliententerview/)            { ts3bot::Notify::notifycliententerview(); next;}
+			if(/^notifyclientleftview/)             { ts3bot::Notify::notifyclientleftview(); next;}
+			if(/^notifyclientmoved/)                { ts3bot::Notify::notifyclientmoved(); next;}
+			if(/^notifychannelcreated/)             { ts3bot::Notify::notifychannelcreated(); next;}
+			if(/^notifychanneldeleted/)             { ts3bot::Notify::notifychanneldeleted(); next;}
+			if(/^notifychanneledited/)              { ts3bot::Notify::notifychanneledited(); next;}
+			if(/^notifychannelpasswordchanged/)     { ts3bot::Notify::notifychannelpasswordchanged(); next;}
+			if(/^notifychanneldescriptionchanged/)  { ts3bot::Notify::notifychanneldescriptionchanged(); next;}
+			if(/^notifytextmessage/)                { ts3bot::Notify::notifytextmessage(); next;}
 
-				# Check is command
-				if(!$tmp{'msg'} =~ /^\!/) {
-					next;
+			if($last_cmd =~ /^clientlist/ and $wait_response) {
+				my @clientlines	;
+				print "recieving clientlist\n";
+				push @clientlines, split(/\|/, $_);
+				foreach(@clientlines) {
+					chomp;
+					my %c = &ts3bot::parse;
+					$c{oldconnectinon} = 1;
+					&clientconnected(%c);
 				}
-
-				&info("Got command from $tmp{invokername}: $tmp{msg}");
-
-				# Check is op
-				if(!checkop( $tmp{'invokeruid'} )) {
-					next;
-				}
-
-				if($tmp{msg} =~ /\!dump/) { ts3bot::Commands::cmd_dump(%tmp); next; }
-				if($tmp{msg} =~ /\!test/) { ts3bot::Commands::cmd_test(%tmp); next; }
-				if($tmp{msg} =~ /\!testbad (.*)/) { ts3bot::Commands::cmd_testbad(%tmp); next; }
-				next;
+				#print Dumper(@clients);
 			}
-
-			if($wait_response) {
-				if($last_cmd =~ /^clientlist/) {
-					my @clientlines	;
-					print "recieving clientlist\n";
-					push @clientlines, split(/\|/, $_);
-					#print Dumper(\@clientlines);
-					foreach(@clientlines) {
-						chomp;
-						my %tmp = &ts3bot::Response::parse;
-						$tmp{'time'} = time;
-						#print Dumper(\%tmp);
-						if(!defined($tmp{'client_type'}) or $tmp{'client_type'} =~ /^0$/) {
-							&info("Already connected client: $tmp{client_nickname}");
-							$clients[$tmp{clid}] = \%tmp;
-						}
-						else {
-							&info("Already connected wrong type client: $tmp{client_nickname}");
-						}
-					}
-				}
-				else {
-					print "Unknow response\n";
-				}
+			elsif($last_cmd =~ /^whoami/ and $wait_response) {
+				my %tmp = &ts3bot::parse;
+				$my_client_id = $tmp{client_id};
+				
 			}
 			else {
 				print "Unknow command: " . $_."\n";
@@ -181,6 +160,19 @@ while (1) {
 		$pingtime = time;
 		&ts("serverinfo");
 	}
+
+	if($EXIT) {
+	        foreach my $c (@ts3bot::clients) {
+	                if($c->{clid}) {
+	                        my %tmp = %{$c};
+	                        $tmp{"reasonid"} = 0;
+	                        &ts3bot::clientdisconnected(%tmp);
+	                }
+	        }
+		warn "Graceful exit!\n";
+		exit;
+	}
+
 	sleep 0.2;
 }
 
@@ -306,7 +298,100 @@ sub checkbadnick {
 	}
 }
 
+sub parse {
+	my @datas = split / /, $_;
+	my %tmp;
+	while(@datas) {
+		my ($key, $value) = split /\s*=\s*/, shift(@datas), 2;
+		$tmp{$key} = ts3bot::unescape($value);
+	}
+	return %tmp;
+}
 
 
+sub clientconnected {
+	my (%c) = @_;
+
+	$c{'time'} = time;
+	$clients[$c{clid}] = \%c;
+
+	if(!defined($c{'client_type'}) or $c{'client_type'} =~ /^0$/) {
+		if(!$c{oldconnectinon}) {
+			&ts3bot::info("Client " .$c{client_nickname}. "(" . $c{clid} . ") connected");
+			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash, created) VALUES (?, ?, 'TeamSpeak3', ?, NOW()) ON DUPLICATE KEY UPDATE nickname=?, onlinecount=onlinecount+1;";
+			my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->execute(
+				$ts3bot::clients[$c{clid}]{client_unique_identifier},
+				$ts3bot::clients[$c{clid}]{client_nickname},
+				md5_hex($ts3bot::clients[$c{clid}]{client_unique_identifier}.$ts3bot::clients[$c{clid}]{client_nickname}.time),
+				$ts3bot::clients[$c{clid}]{client_nickname}
+			) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->finish;
+		}
+		else {
+			&ts3bot::info("Old connection: $c{client_nickname}");
+			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash, created) VALUES (?, ?, 'TeamSpeak3', ?, NOW()) ON DUPLICATE KEY UPDATE nickname=?;";
+			my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->execute(
+				$ts3bot::clients[$c{clid}]{client_unique_identifier},
+				$ts3bot::clients[$c{clid}]{client_nickname},
+				md5_hex($ts3bot::clients[$c{clid}]{client_unique_identifier}.$ts3bot::clients[$c{clid}]{client_nickname}.time),
+				$ts3bot::clients[$c{clid}]{client_nickname}
+			) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->finish;
+		}
+	}
+	else {
+		if(!$c{oldconnectinon}) {
+			&ts3bot::info("Something " .$c{client_nickname}. "(" . $c{clid} . ") connected");
+		}
+		else {
+			&ts3bot::info("Old connection, not client: $c{client_nickname}");
+		}
+	}
+
+	
+
+	
+}
+
+sub clientdisconnected {
+	my (%c) = @_;
+
+	return if(!$ts3bot::clients[$c{clid}]);
+	my $onlinetime = time - $ts3bot::clients[$c{clid}]{'time'};
+
+	if($c{reasonid} != 5) {
+		if(!$clients[$c{clid}]{'client_type'} =~ /^0$/) {
+			&ts3bot::info("Client " . $clients[$c{clid}]{client_nickname} . "(" . $c{clid} . ") disconnected.");
+		}
+		else {
+			my $sql = "UPDATE `".$config->{db_infotable}."` SET `onlinetime` = `onlinetime` + ? WHERE `uuid` = ?;";
+			my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->execute(
+				$onlinetime,
+				$ts3bot::clients[$c{clid}]{client_unique_identifier},
+			) or die "huh?" . $ts3bot::dbh->errstr;
+			$sh->finish;
+
+			&ts3bot::info("Client " . $clients[$c{clid}]{client_nickname} . "(" . $c{clid} . ") disconnected. Online time " . (time - $ts3bot::clients[$c{clid}]{'time'}));
+		}
+	}
+	else {
+		my $sql = "INSERT INTO `".$config->{db_kicktable}."` (uuid, nickname, onlinetime, reasonid, reasonmsg) VALUES (?, ?, ?, ?, ?);";
+		my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
+		$sh->execute(
+			$ts3bot::clients[$c{clid}]{client_unique_identifier},
+			$ts3bot::clients[$c{clid}]{client_nickname},
+			$onlinetime,
+			$c{reasonid},
+			$c{reasonmsg}
+		) or die "huh?" . $ts3bot::dbh->errstr;
+		$sh->finish;
+		&ts3bot::info("Client " . $clients[$c{clid}]{client_nickname} . "(" . $c{clid} . ") kicked.");
+	}
+
+	delete $ts3bot::clients[$c{clid}];
+}
 die "end";
 
