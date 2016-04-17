@@ -1,9 +1,11 @@
 #!/bin/sh
 
-if [ -f $FILE ];
+if [ ! -f badchannel.txt ] ; then cp example_badchannel.txt badchannel.txt; fi;
+if [ ! -f badnick.txt ]; then cp example_badnick.txt badnick.txt; fi;
+if [ -f conf.pl ];
 then
 	git pull
 	perl ts3bot.pl
 else
-	echo "Config file dosent not exists!. Copy example_conf.pl to conf.pl, edit it and try again."
+	echo 'do "cp example_conf.pl conf.pl && nano conf.pl"'
 fi
