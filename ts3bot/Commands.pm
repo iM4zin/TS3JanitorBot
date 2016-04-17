@@ -10,7 +10,7 @@ sub cmd_test {
     print Dumper(\@ts3bot::clients);
     # now retrieve data from the table.
     foreach my $c (@ts3bot::clients) {
-        my $sth = $ts3bot::dbh->prepare("SELECT * FROM onlinetime WHERE client_unique_identifier LIKE ?;") or die "Huh?" . $ts3bot::dbh->errstr;
+        my $sth = $ts3bot::dbh->prepare("SELECT * FROM `onlinetime` WHERE `uuid` = ?;") or die "Huh?" . $ts3bot::dbh->errstr;
         $sth->execute(
             $c->{client_unique_identifier}
         ) or die "Huh?" . $ts3bot::dbh->errstr;
@@ -39,6 +39,7 @@ sub cmd_test {
 }
 
 sub cmd_dump {
+	my (%tmp) = @_;
 	my $count = 0;
 	foreach my $c (@ts3bot::clients) {
 		if($c->{clid}) {
@@ -63,4 +64,10 @@ sub cmd_testbad {
 		&ts3bot::ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . ts3bot::escape("No string found"));
 	}
 }
+
+sub cmd_stopbot {
+	my (%tmp) = @_;
+	$ts3bot::EXIT = 1;
+}
+
 1;
