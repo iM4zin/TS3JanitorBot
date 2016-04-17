@@ -318,7 +318,7 @@ sub clientconnected {
 	if(!defined($c{'client_type'}) or $c{'client_type'} =~ /^0$/) {
 		if(!$c{oldconnectinon}) {
 			&ts3bot::info("Client " .$c{client_nickname}. "(" . $c{clid} . ") connected");
-			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash) VALUES (?, ?, 'TeamSpeak3', ?) ON DUPLICATE KEY UPDATE nickname=?, onlinecount=onlinecount+1;";
+			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash, created) VALUES (?, ?, 'TeamSpeak3', ?, NOW()) ON DUPLICATE KEY UPDATE nickname=?, onlinecount=onlinecount+1;";
 			my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
 			$sh->execute(
 				$ts3bot::clients[$c{clid}]{client_unique_identifier},
@@ -330,7 +330,7 @@ sub clientconnected {
 		}
 		else {
 			&ts3bot::info("Old connection: $c{client_nickname}");
-			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash) VALUES (?, ?, 'TeamSpeak3', ?) ON DUPLICATE KEY UPDATE nickname=?;";
+			my $sql = "INSERT INTO `".$config->{db_infotable}."` (uuid, nickname, type, hash, created) VALUES (?, ?, 'TeamSpeak3', ?, NOW()) ON DUPLICATE KEY UPDATE nickname=?;";
 			my $sh = $ts3bot::dbh->prepare( $sql ) or die "huh?" . $ts3bot::dbh->errstr;
 			$sh->execute(
 				$ts3bot::clients[$c{clid}]{client_unique_identifier},
