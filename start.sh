@@ -6,7 +6,7 @@ if [ -f conf.pl ];
 then
 	git pull
 	perl ts3bot.pl
-	rc=$?; if [[ $rc != 255 ]]; then echo 'you may have to do "cpan Math::Round module"'; fi
+	rc=$?; if [ $rc != 255 ]; then echo 'you may have to do "cpan Math::Round module"'; fi
 else
 	echo 'do "cp example_conf.pl conf.pl && nano conf.pl"'
 fi

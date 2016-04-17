@@ -11,7 +11,7 @@ use Math::Round;
 use ts3bot::Notify;
 use ts3bot::Commands;
 
-my $config=do("conf.pl");
+our $config=do("conf.pl");
 
 die "Error parsing config file: $@" if $@;
 die "Error reading config file: $!" unless defined $config;

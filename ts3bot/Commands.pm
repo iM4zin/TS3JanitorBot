@@ -7,10 +7,9 @@ use DBI;
 sub cmd_test {
     my (%tmp) = @_;
 
-    print Dumper(\@ts3bot::clients);
     # now retrieve data from the table.
     foreach my $c (@ts3bot::clients) {
-        my $sth = $ts3bot::dbh->prepare("SELECT * FROM `onlinetime` WHERE `uuid` = ?;") or die "Huh?" . $ts3bot::dbh->errstr;
+        my $sth = $ts3bot::dbh->prepare("SELECT * FROM `".$ts3bot::config->{db_infotable}."` WHERE `uuid` = ? AND `type` = 'TeamSpeak3';") or die "Huh?" . $ts3bot::dbh->errstr;
         $sth->execute(
             $c->{client_unique_identifier}
         ) or die "Huh?" . $ts3bot::dbh->errstr;
