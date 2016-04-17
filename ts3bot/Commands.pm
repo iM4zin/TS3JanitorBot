@@ -29,8 +29,7 @@ sub cmd_test {
             }
             my $urlescape = $c->{client_nickname};
             $urlescape =~ s/ /%20/g;
-            print "Nickname: " .$ref->{'nickname'}. ", time: " .$t. ", count: " .$ref->{'connectioncount'}. "\n";
-            &ts3bot::ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . ts3bot::escape("Nickname: [URL=client://".$c->{clid}."/".$c->{client_unique_identifier}."~".$urlescape."]".$c->{client_nickname}."[/URL], time: " .$t. ", count: " .$ref->{'connectioncount'}));
+            &ts3bot::ts("sendtextmessage targetmode=1 target=" . $tmp{invokerid} . " msg=" . ts3bot::escape("Nickname: [URL=client://".$c->{clid}."/".$c->{client_unique_identifier}."~".$urlescape."]".$c->{client_nickname}."[/URL], time: " .$t. ", count: " .$ref->{'onlinecount'}));
         }
         $sth->finish();
     }
